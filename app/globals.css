@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+/*
+ * Deliberately no prefers-color-scheme dark variant here. The last app built
+ * this way (test-connection) had light-background cards inherit near-white
+ * text from a dark-mode body color and become unreadable — every surface in
+ * this app sets its own explicit text color instead of relying on
+ * inheritance, and the app itself only ships one theme so that invariant is
+ * easy to keep.
+ */
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
