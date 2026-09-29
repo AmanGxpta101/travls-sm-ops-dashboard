@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+/* Tailwind v4 dropped the pointer cursor on buttons; put it back on
+   everything clickable. Disabled controls show not-allowed. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  label[for],
+  select:not(:disabled),
+  input:is([type="checkbox"], [type="radio"], [type="submit"], [type="button"], [type="file"]):not(:disabled) {
+    cursor: pointer;
+  }
+  :disabled {
+    cursor: not-allowed;
+  }
+}
+
 /*
  * Deliberately no prefers-color-scheme dark variant here. The last app built
  * this way (test-connection) had light-background cards inherit near-white
