@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getActor } from "@/lib/actor";
@@ -14,16 +15,16 @@ import {
   type OpsShareRow,
 } from "@/lib/ops-api";
 import { ChallengesPanel } from "./challenges-panel";
-import { Banners, OpsHeader } from "./shell";
+import { Banners, ErrorBanner, OpsHeader, PageShell, SectionHeading, Thumb, fmtDate, fmtDay, fmtNum } from "./shell";
 
 async function issueCreditAction(formData: FormData) {
   "use server";
   const shareId = String(formData.get("shareId"));
   const amount = Number(formData.get("amount"));
-  const issuedBy = String(formData.get("issuedBy") ?? "").trim();
+  const issuedBy = await getActor();
 
   if (!issuedBy) {
-    redirect(`/?error=${encodeURIComponent("Enter your name in \"Issued by\" before crediting.")}`);
+    redirect(`/?error=${encodeURIComponent("Your session has no ops account — log out and sign in again.")}`);
   }
   if (!Number.isFinite(amount) || amount <= 0) {
     redirect(`/?error=${encodeURIComponent("Credit amount must be a positive number.")}`);
@@ -64,9 +65,9 @@ async function refreshEngagementAction(formData: FormData) {
 async function addKolAction(formData: FormData) {
   "use server";
   const who = String(formData.get("who") ?? "").trim();
-  const addedBy = String(formData.get("addedBy") ?? "").trim();
+  const addedBy = await getActor();
   if (!who || !addedBy) {
-    redirect(`/?error=${encodeURIComponent("Enter a handle or user ID, and your name, to add a KOL.")}`);
+    redirect(`/?error=${encodeURIComponent("Enter a handle or user ID to add a KOL.")}`);
   }
   let errorMessage: string | null = null;
   try {
@@ -89,9 +90,9 @@ async function removeKolAction(formData: FormData) {
 
 function TierBadge({ tier }: { tier: OpsShareRow["tier"] }) {
   return tier === "kol" ? (
-    <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-800">KOL · direct</span>
+    <span className="badge tone-brand">KOL · direct</span>
   ) : (
-    <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800">Community · pasted</span>
+    <span className="badge tone-muted">Community · pasted</span>
   );
 }
 
@@ -99,7 +100,7 @@ function StatusBadge({ row }: { row: OpsShareRow }) {
   if (row.postStatus === "invalidated") {
     return (
       <span
-        className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800"
+        className="badge tone-bad"
         title={row.invalidated ? `“${row.invalidated.reason}” — ${row.invalidated.by}` : undefined}
       >
         Invalidated
@@ -107,37 +108,318 @@ function StatusBadge({ row }: { row: OpsShareRow }) {
     );
   }
   if (row.postStatus === "deleted" && !row.credited) {
-    return (
-      <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
-        Post deleted
-      </span>
-    );
+    return <span className="badge tone-bad">Post deleted</span>;
   }
   if (row.credited) {
     return (
-      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">
-        Credited (₹{row.creditAmount} by {row.issuedBy})
+      <span className="badge tone-muted">
+        Credited ₹{row.creditAmount} · {row.issuedBy}
       </span>
     );
   }
   if (row.postStatus === "pending_confirmation") {
-    return (
-      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
-        Awaiting post link
-      </span>
-    );
+    return <span className="badge tone-brand">Awaiting post link</span>;
   }
   if (row.eligible) {
-    return (
-      <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
-        Eligible — {row.thresholdsMet.join(", ")}
-      </span>
-    );
+    return <span className="badge tone-good">Eligible — {row.thresholdsMet.join(", ")}</span>;
   }
+  return <span className="badge tone-muted">Not yet eligible</span>;
+}
+
+function Avatar({ label }: { label: string }) {
   return (
-    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
-      Not yet eligible
+    <span
+      className="grid size-8 shrink-0 place-items-center rounded-full border border-hairline-lit bg-surface text-xs font-semibold uppercase text-ink"
+      aria-hidden
+    >
+      {label.slice(0, 1)}
     </span>
+  );
+}
+
+/** The campaign at a glance, in the same gold banner users see their points in. */
+function Summary({
+  shares,
+  kols,
+  challenges,
+}: {
+  shares: OpsShareRow[];
+  kols: KolRow[];
+  challenges: ChallengeRow[];
+}) {
+  const counted = shares.filter((s) => s.postStatus !== "invalidated");
+  const awaitingCredit = shares.filter((s) => s.eligible && !s.credited).length;
+  const awaitingLink = shares.filter((s) => s.postStatus === "pending_confirmation").length;
+  const impressions = counted.reduce((sum, s) => sum + (s.metrics?.impressionCount ?? 0), 0);
+  const likes = counted.reduce((sum, s) => sum + (s.metrics?.likes ?? 0), 0);
+  const people = new Set(shares.map((s) => s.userId)).size;
+
+  const stats = [
+    { label: "Awaiting credit", value: awaitingCredit, lit: awaitingCredit > 0 },
+    { label: "Awaiting link", value: awaitingLink },
+    { label: "Likes", value: likes },
+    { label: "Impressions", value: impressions },
+  ];
+
+  return (
+    <section aria-labelledby="summary-heading" className="card-gold relative overflow-hidden rounded-panel p-5 sm:p-8">
+      <Image
+        src="/assets/photography/globe-flight.webp"
+        alt=""
+        width={1200}
+        height={512}
+        priority
+        sizes="(min-width: 1024px) 760px, 80vw"
+        className="pointer-events-none absolute inset-y-0 right-0 h-full w-[80%] object-cover object-[80%_40%] sm:w-[60%]"
+        style={{ maskImage: "linear-gradient(to right, transparent, rgb(0 0 0 / 0.3) 35%, black 70%)" }}
+      />
+
+      <div className="relative flex flex-col gap-6">
+        <h2 id="summary-heading" className="font-mono text-xs uppercase tracking-[0.3em] text-ink">
+          Social mining campaign
+        </h2>
+
+        <div className="drop-shadow-[0_2px_12px_rgb(0_0_0/0.6)]">
+          <p className="font-serif text-[clamp(3rem,6vw+1rem,4.5rem)] leading-none tracking-tight tabular-nums text-ink">
+            {fmtNum(shares.length)}
+          </p>
+          <p className="mt-3 text-sm text-ink-muted sm:text-base">
+            share{shares.length === 1 ? "" : "s"} tracked from <span className="text-ink">{fmtNum(people)}</span>{" "}
+            {people === 1 ? "person" : "people"} ·{" "}
+            <span className="text-brand">{challenges.filter((c) => c.active).length}</span> live challenges ·{" "}
+            <span className="text-brand">{kols.length}</span> KOL{kols.length === 1 ? "" : "s"}
+          </p>
+        </div>
+
+        <dl className="grid max-w-2xl grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+          {stats.map((s) => (
+            <div
+              key={s.label}
+              className={`rounded-card border px-3.5 py-3 backdrop-blur-md ${
+                s.lit ? "border-brand/50 bg-brand/10" : "border-hairline-lit bg-canvas/60"
+              }`}
+            >
+              <dt className="eyebrow">{s.label}</dt>
+              <dd className={`mt-1 font-serif text-2xl tabular-nums ${s.lit ? "text-brand" : "text-ink"}`}>
+                {fmtNum(s.value)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </section>
+  );
+}
+
+function KolPanel({ kols }: { kols: KolRow[] }) {
+  return (
+    <section className="panel flex flex-col gap-4 p-4 sm:p-6">
+      <SectionHeading
+        title="KOLs"
+        count={kols.length}
+        aside="KOLs' shares are posted for them via the X API. Everyone else posts the template and pastes the link back."
+      />
+      <form action={addKolAction} className="flex gap-2">
+        <input type="text" name="who" placeholder="@handle or user ID" required className="field min-w-0 flex-1" />
+        <button type="submit" className="btn-brand">
+          Add KOL
+        </button>
+      </form>
+      {kols.length > 0 ? (
+        <ul className="flex flex-col gap-1.5">
+          {kols.map((k) => (
+            <li
+              key={k.userId}
+              className="flex items-center gap-3 rounded-card border border-hairline bg-surface/60 py-2 pl-2 pr-1.5"
+              title={`${k.userId} · added by ${k.addedBy} ${new Date(k.addedAt).toLocaleDateString()}`}
+            >
+              <Avatar label={k.handle ?? k.userId} />
+              <div className="min-w-0 flex-1">
+                <Link
+                  href={`/users/${encodeURIComponent(k.userId)}`}
+                  className="block truncate text-sm font-medium text-ink hover:text-brand"
+                >
+                  {k.handle ? `@${k.handle}` : k.userId}
+                </Link>
+                <p className="truncate text-xs text-ink-muted">added by {k.addedBy}</p>
+              </div>
+              <form action={removeKolAction}>
+                <input type="hidden" name="userId" value={k.userId} />
+                <button
+                  type="submit"
+                  className="grid size-7 place-items-center rounded-full text-ink-muted transition-colors hover:bg-destructive/15 hover:text-destructive-ink"
+                  aria-label={`Remove ${k.handle ?? k.userId} from KOLs`}
+                >
+                  ×
+                </button>
+              </form>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="rounded-card border border-dashed border-hairline-lit px-4 py-3 text-sm text-ink-muted">
+          No KOLs yet — everyone is on the paste-the-link flow.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function SharesTable({ shares, kolUserIds }: { shares: OpsShareRow[]; kolUserIds: Set<string> }) {
+  return (
+    <div className="panel overflow-x-auto">
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>Handle</th>
+            <th>Flow</th>
+            <th>Challenge</th>
+            <th>Post</th>
+            <th>Status</th>
+            <th>Shared</th>
+            <th>Issue credit</th>
+            <th className="text-right!">Likes</th>
+            <th className="text-right!">RTs</th>
+            <th className="text-right!">Replies</th>
+            <th className="text-right!">Quotes</th>
+            <th className="text-right!">Bookm.</th>
+            <th className="text-right!">Impr.</th>
+          </tr>
+        </thead>
+        <tbody>
+          {shares.map((row) => (
+            <tr key={row.shareId} className="align-top">
+              <td>
+                <div className="flex items-center gap-2.5">
+                  <Avatar label={row.handle ?? row.userId} />
+                  <Link
+                    href={`/users/${encodeURIComponent(row.userId)}`}
+                    className="whitespace-nowrap font-medium text-ink hover:text-brand"
+                    title="Open this user's profile — history, points, moderation"
+                  >
+                    {row.handle ? (
+                      row.handleIsCurrentAccount ? (
+                        <span
+                          className="font-normal italic text-ink-muted"
+                          title="Author wasn't recorded for this share (posted before author capture, and the post is gone from X). Showing the user's current X account."
+                        >
+                          @{row.handle}?
+                        </span>
+                      ) : (
+                        `@${row.handle}`
+                      )
+                    ) : (
+                      row.userId
+                    )}
+                  </Link>
+                  {kolUserIds.has(row.userId) && (
+                    <span className="text-xs text-brand" title="On the KOL list">
+                      ★
+                    </span>
+                  )}
+                </div>
+              </td>
+              <td>
+                <TierBadge tier={row.tier} />
+              </td>
+              <td>
+                {row.task ? (
+                  <div className="flex items-start gap-3">
+                    <Thumb challenge={row.task} className="hidden w-14 sm:block" />
+                    <div>
+                      <p
+                        className={`whitespace-nowrap text-ink ${
+                          row.postStatus === "invalidated" ? "text-ink-muted line-through" : ""
+                        }`}
+                      >
+                        {row.task.title}
+                      </p>
+                      <p className="mt-0.5 text-xs font-semibold text-brand">{row.task.points} pts</p>
+                      {row.invalidated && (
+                        <p className="mt-1 text-xs text-destructive-ink">
+                          Invalidated: “{row.invalidated.reason}” — {row.invalidated.by}
+                        </p>
+                      )}
+                      {row.deductions.map((d) => (
+                        <p key={d.at} className="mt-1 text-xs text-gold">
+                          −{d.points} pts: “{d.reason}” — {d.by}
+                        </p>
+                      ))}
+                      {row.taskBlock && (
+                        <p className="mt-1 text-xs text-ink-muted">
+                          Challenge disabled for user: “{row.taskBlock.reason}”
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <span className="text-xs text-ink-faint" title={`copy variant: ${row.copyVariant}`}>
+                    (before challenges)
+                  </span>
+                )}
+              </td>
+              <td>
+                <div className="flex items-center gap-2">
+                  {row.postUrl ? (
+                    <a
+                      href={row.postUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="whitespace-nowrap font-medium text-brand hover:text-brand-hover"
+                    >
+                      View ↗
+                    </a>
+                  ) : (
+                    <span className="text-ink-faint">—</span>
+                  )}
+                  {row.postUrl && (
+                    <form action={refreshEngagementAction}>
+                      <input type="hidden" name="shareId" value={row.shareId} />
+                      <button type="submit" className="btn-chip px-2.5 py-0.5" title="Fetch current numbers from X now">
+                        Refresh
+                      </button>
+                    </form>
+                  )}
+                </div>
+                <p className="mt-1 whitespace-nowrap text-xs text-ink-faint">
+                  {row.fetchedAt ? `checked ${fmtDate(row.fetchedAt)}` : "never checked"}
+                </p>
+              </td>
+              <td>
+                <StatusBadge row={row} />
+              </td>
+              <td className="whitespace-nowrap text-ink-muted">{fmtDay(row.sharedAt)}</td>
+              <td>
+                {row.eligible && !row.credited ? (
+                  <form action={issueCreditAction} className="flex items-center gap-1.5">
+                    <input type="hidden" name="shareId" value={row.shareId} />
+                    <input
+                      type="number"
+                      name="amount"
+                      placeholder="₹ Amt"
+                      min="0"
+                      step="0.01"
+                      required
+                      className="field w-24 px-3 py-1.5 text-xs"
+                    />
+                    <button type="submit" className="btn-brand px-3.5 py-1.5 text-xs">
+                      Credit
+                    </button>
+                  </form>
+                ) : (
+                  <span className="text-xs text-ink-faint">—</span>
+                )}
+              </td>
+              {(["likes", "retweets", "replies", "quoteCount", "bookmarkCount", "impressionCount"] as const).map((k) => (
+                <td key={k} className="text-right tabular-nums text-ink">
+                  {row.metrics ? fmtNum(row.metrics[k]) : <span className="text-ink-faint">—</span>}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -160,243 +442,36 @@ export default async function Dashboard({
   }
   const kolUserIds = new Set(kols.map((k) => k.userId));
 
-  const eligibleUncredited = shares.filter((s) => s.eligible && !s.credited).length;
-
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 py-10 sm:px-6">
-      <OpsHeader
-        active="activity"
-        actor={actor}
-        returnTo="/"
-        subtitle={`${shares.length} share${shares.length === 1 ? "" : "s"} tracked · ${eligibleUncredited} awaiting credit · moderate from a user's profile`}
-      />
+    <PageShell>
+      <OpsHeader active="activity" actor={actor} returnTo="/" />
       <Banners error={params.error} notice={params.notice} />
 
-      {!loadError && (
-        <section className="rounded border border-zinc-200 p-4">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-sm font-semibold text-zinc-900">KOLs ({kols.length})</h2>
-            <p className="text-xs text-zinc-500">
-              KOLs&apos; shares are posted for them via the X API. Everyone else posts the template and pastes the link back.
-            </p>
-          </div>
-          <form action={addKolAction} className="mt-3 flex flex-wrap items-center gap-1.5">
-            <input
-              type="text"
-              name="who"
-              placeholder="@handle or user ID"
-              required
-              className="w-48 rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-900"
-            />
-            <input
-              type="text"
-              name="addedBy"
-              defaultValue={actor}
-              placeholder="Your name"
-              required
-              className="w-28 rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-900"
-            />
-            <button type="submit" className="rounded bg-black px-2 py-1 text-xs font-medium text-white">
-              Add KOL
-            </button>
-          </form>
-          {kols.length > 0 && (
-            <ul className="mt-3 flex flex-wrap gap-2">
-              {kols.map((k) => (
-                <li
-                  key={k.userId}
-                  className="flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 py-0.5 pl-2.5 pr-1 text-xs text-violet-900"
-                  title={`${k.userId} · added by ${k.addedBy} ${new Date(k.addedAt).toLocaleDateString()}`}
-                >
-                  {k.handle ? `@${k.handle}` : k.userId}
-                  <form action={removeKolAction}>
-                    <input type="hidden" name="userId" value={k.userId} />
-                    <button
-                      type="submit"
-                      className="rounded-full px-1.5 text-violet-500 hover:bg-violet-100 hover:text-violet-900"
-                      aria-label={`Remove ${k.handle ?? k.userId} from KOLs`}
-                    >
-                      ×
-                    </button>
-                  </form>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
-
-      {!loadError && <ChallengesPanel challenges={challenges} />}
-
       {loadError ? (
-        <p className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">
-          Can&apos;t reach the Social Mining Service: {loadError}
-        </p>
-      ) : shares.length === 0 ? (
-        <p className="text-sm text-zinc-500">No shares recorded yet.</p>
+        <ErrorBanner>Can&apos;t reach the Social Mining Service: {loadError}</ErrorBanner>
       ) : (
-        <div className="overflow-x-auto rounded border border-zinc-200">
-          <table className="min-w-full divide-y divide-zinc-200 text-sm">
-            <thead className="bg-zinc-50 text-left text-xs font-medium uppercase tracking-wide text-zinc-500">
-              <tr>
-                <th className="px-4 py-2">Handle</th>
-                <th className="px-4 py-2">Flow</th>
-                <th className="px-4 py-2">Challenge</th>
-                <th className="px-4 py-2">Post</th>
-                <th className="px-4 py-2">Likes</th>
-                <th className="px-4 py-2">Retweets</th>
-                <th className="px-4 py-2">Replies</th>
-                <th className="px-4 py-2">Quotes</th>
-                <th className="px-4 py-2">Bookmarks</th>
-                <th className="px-4 py-2">Impressions</th>
-                <th className="px-4 py-2">Status</th>
-                <th className="px-4 py-2">Shared</th>
-                <th className="px-4 py-2">Issue credit</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100">
-              {shares.map((row) => (
-                <tr key={row.shareId}>
-                  <td className="px-4 py-2 font-medium text-zinc-900">
-                    <Link
-                      href={`/users/${encodeURIComponent(row.userId)}`}
-                      className="hover:underline"
-                      title="Open this user's profile — history, points, moderation"
-                    >
-                    {row.handle ? (
-                      row.handleIsCurrentAccount ? (
-                        <span
-                          className="font-normal italic text-zinc-400"
-                          title="Author wasn't recorded for this share (posted before author capture, and the post is gone from X). Showing the user's current X account."
-                        >
-                          @{row.handle}?
-                        </span>
-                      ) : (
-                        `@${row.handle}`
-                      )
-                    ) : (
-                      row.userId
-                    )}
-                    </Link>
-                    {kolUserIds.has(row.userId) && (
-                      <span className="ml-1 text-xs font-normal text-violet-700" title="On the KOL list">
-                        ★
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2 whitespace-nowrap">
-                    <TierBadge tier={row.tier} />
-                  </td>
-                  <td className="px-4 py-2 align-top">
-                    {row.task ? (
-                      <>
-                        <p className={`whitespace-nowrap text-zinc-900 ${row.postStatus === "invalidated" ? "line-through" : ""}`}>
-                          {row.task.title}{" "}
-                          <span className="text-xs font-semibold text-amber-800">{row.task.points} pts</span>
-                        </p>
-                        {row.invalidated && (
-                          <p className="text-xs text-red-700">
-                            Invalidated: “{row.invalidated.reason}” — {row.invalidated.by}
-                          </p>
-                        )}
-                        {row.deductions.map((d) => (
-                          <p key={d.at} className="text-xs text-amber-800">
-                            −{d.points} pts: “{d.reason}” — {d.by}
-                          </p>
-                        ))}
-                        {row.taskBlock && (
-                          <p className="text-xs text-zinc-500">Challenge disabled for user: “{row.taskBlock.reason}”</p>
-                        )}
-                      </>
-                    ) : (
-                      <span className="text-xs text-zinc-400" title={`copy variant: ${row.copyVariant}`}>
-                        (before challenges)
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2">
-                    <div className="flex items-center gap-2">
-                      {row.postUrl ? (
-                        <a
-                          href={row.postUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-blue-700 underline"
-                        >
-                          view
-                        </a>
-                      ) : (
-                        <span className="text-zinc-400">—</span>
-                      )}
-                      {row.postUrl && (
-                        <form action={refreshEngagementAction}>
-                          <input type="hidden" name="shareId" value={row.shareId} />
-                          <button
-                            type="submit"
-                            className="rounded border border-zinc-300 px-1.5 py-0.5 text-xs text-zinc-600 hover:bg-zinc-50"
-                            title="Fetch current numbers from X now"
-                          >
-                            Refresh
-                          </button>
-                        </form>
-                      )}
-                    </div>
-                    <p className="mt-0.5 text-xs text-zinc-400">
-                      {row.fetchedAt
-                        ? `checked ${new Date(row.fetchedAt).toLocaleString()}`
-                        : "never checked"}
-                    </p>
-                  </td>
-                  <td className="px-4 py-2 text-zinc-900">{row.metrics?.likes ?? "—"}</td>
-                  <td className="px-4 py-2 text-zinc-900">{row.metrics?.retweets ?? "—"}</td>
-                  <td className="px-4 py-2 text-zinc-900">{row.metrics?.replies ?? "—"}</td>
-                  <td className="px-4 py-2 text-zinc-900">{row.metrics?.quoteCount ?? "—"}</td>
-                  <td className="px-4 py-2 text-zinc-900">{row.metrics?.bookmarkCount ?? "—"}</td>
-                  <td className="px-4 py-2 text-zinc-900">{row.metrics?.impressionCount ?? "—"}</td>
-                  <td className="px-4 py-2">
-                    <StatusBadge row={row} />
-                  </td>
-                  <td className="px-4 py-2 whitespace-nowrap text-zinc-600">
-                    {new Date(row.sharedAt).toLocaleDateString()}
-                  </td>
-                  <td className="px-4 py-2">
-                    {row.eligible && !row.credited ? (
-                      <form action={issueCreditAction} className="flex items-center gap-1.5">
-                        <input type="hidden" name="shareId" value={row.shareId} />
-                        <input
-                          type="number"
-                          name="amount"
-                          placeholder="Amt"
-                          min="0"
-                          step="0.01"
-                          required
-                          className="w-20 rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-900"
-                        />
-                        <input
-                          type="text"
-                          name="issuedBy"
-                          defaultValue={actor}
-                          placeholder="Your name"
-                          required
-                          className="w-24 rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-900"
-                        />
-                        <button
-                          type="submit"
-                          className="rounded bg-black px-2 py-1 text-xs font-medium text-white"
-                        >
-                          Credit
-                        </button>
-                      </form>
-                    ) : (
-                      <span className="text-xs text-zinc-400">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <Summary shares={shares} kols={kols} challenges={challenges} />
+
+          <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+            <ChallengesPanel challenges={challenges} />
+            <KolPanel kols={kols} />
+          </div>
+
+          <section className="flex flex-col gap-4">
+            <SectionHeading
+              title="Shares"
+              count={shares.length}
+              aside="Engagement is each post's latest check — nothing polls X in the background. Moderate from a user's profile."
+            />
+            {shares.length === 0 ? (
+              <p className="panel px-5 py-8 text-center text-sm text-ink-muted">No shares recorded yet.</p>
+            ) : (
+              <SharesTable shares={shares} kolUserIds={kolUserIds} />
+            )}
+          </section>
+        </>
       )}
-    </div>
+    </PageShell>
   );
 }

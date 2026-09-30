@@ -1,0 +1,146 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="512" height="512" viewBox="80 80 1093 1093">
+  <title>TRAVLS gold airplane T</title>
+  <!-- Light system: gold T on a square black tile, since yellow on a white tab bar
+       has no contrast. Dark system: the T alone, with no tile and no drop shadow. -->
+  <style>
+    @media (prefers-color-scheme: dark) {
+      .ground { display: none; }
+      .lift { filter: none; }
+    }
+  </style>
+  <defs>
+    <linearGradient id="silver" x2="1" y2="1">
+      <stop stop-color="#f5f7fa"/>
+      <stop offset=".18" stop-color="#92969c"/>
+      <stop offset=".42" stop-color="#d1d4d8"/>
+      <stop offset=".65" stop-color="#72767d"/>
+      <stop offset=".85" stop-color="#e8ebef"/>
+      <stop offset="1" stop-color="#92969b"/>
+    </linearGradient>
+
+    <radialGradient id="black" cx=".38" cy=".28" r=".85">
+      <stop stop-color="#191919"/>
+      <stop offset="1" stop-color="#050505"/>
+    </radialGradient>
+
+    <linearGradient id="gold" x1="0" y1="0" x2=".85" y2="1">
+      <stop stop-color="#ffff79"/>
+      <stop offset=".12" stop-color="#fff323"/>
+      <stop offset=".42" stop-color="#ffdb00"/>
+      <stop offset=".7" stop-color="#ffe515"/>
+      <stop offset="1" stop-color="#c79b00"/>
+    </linearGradient>
+
+    <linearGradient id="edge" x2=".65" y2="1">
+      <stop stop-color="#ffffc5"/>
+      <stop offset=".2" stop-color="#fff64b"/>
+      <stop offset=".52" stop-color="#e8bc00"/>
+      <stop offset=".8" stop-color="#fff23e"/>
+      <stop offset="1" stop-color="#a77b00"/>
+    </linearGradient>
+
+    <linearGradient id="shine" x2="0" y2="1">
+      <stop stop-color="#ffffff" stop-opacity=".95"/>
+      <stop offset=".2" stop-color="#ffffbb" stop-opacity=".65"/>
+      <stop offset=".6" stop-color="#fff83a" stop-opacity=".08"/>
+      <stop offset="1" stop-color="#fff83a" stop-opacity="0"/>
+    </linearGradient>
+
+    <linearGradient id="rail" x2="1" y2="0">
+      <stop stop-color="#ffffb0"/>
+      <stop offset=".14" stop-color="#fff739"/>
+      <stop offset=".6" stop-color="#ffe015"/>
+      <stop offset="1" stop-color="#b68d00"/>
+    </linearGradient>
+
+    <filter id="blur">
+      <feGaussianBlur stdDeviation="5"/>
+    </filter>
+
+    <filter id="shadow" x="-.12" y="-.12" width="1.24" height="1.24">
+      <feDropShadow dx="0" dy="10" stdDeviation="9"
+                    flood-color="#000" flood-opacity=".8"/>
+    </filter>
+
+    <!-- One editable silhouette, including the open airplane cutout. -->
+    <path id="mark" d="
+      M145 80 H1105
+      Q1173 80 1173 148
+      V286 Q1173 350 1109 350
+      H845 Q813 350 813 383
+      L793 1094 Q792 1170 720 1170
+      H668 V562
+      L777 596 Q790 601 788 584
+      Q786 555 765 538
+      L670 469
+      Q658 377 626 331
+      Q594 370 580 466
+      L484 538 Q461 555 459 586
+      Q458 601 472 596
+      L580 562 V1170
+      H527 Q455 1170 455 1097
+      L435 383 Q435 350 403 350
+      H145 Q80 350 80 285
+      V147 Q80 80 145 80 Z"/>
+
+    <clipPath id="clip">
+      <use href="#mark" xlink:href="#mark"/>
+    </clipPath>
+  </defs>
+
+  <rect class="ground" x="80" y="80" width="1093" height="1093" fill="url(#black)"/>
+
+  <!-- Gold body and rounded bevel. -->
+  <use href="#mark" xlink:href="#mark" fill="url(#gold)" class="lift" filter="url(#shadow)"/>
+  <g clip-path="url(#clip)">
+    <use href="#mark" xlink:href="#mark" fill="none" stroke="url(#edge)" stroke-width="30"/>
+    <use href="#mark" xlink:href="#mark" fill="none" stroke="#fff351"
+         stroke-opacity=".45" stroke-width="5"/>
+
+    <!-- Broad reflective top face. -->
+    <path d="M148 109 H1105 Q1143 109 1143 150
+             V275 Q1143 314 1104 314 H151
+             Q111 314 111 275 V151 Q111 109 148 109Z"
+          fill="url(#shine)" opacity=".62"/>
+
+    <!-- Highlight along the upper and left edges. -->
+    <path d="M115 288 V153 Q115 111 155 111 H1104"
+          fill="none" stroke="#ffffdb" stroke-width="14"
+          stroke-linecap="round" filter="url(#blur)"/>
+    <path d="M116 277 V151 Q116 112 153 112 H1098"
+          fill="none" stroke="#fffff1" stroke-width="5"
+          stroke-linecap="round"/>
+
+    <!-- Gold rails on either side of the plane. -->
+    <path d="M468 608 L563 578 V1100 Q563 1144 533 1144
+             Q484 1144 480 1097Z"
+          fill="url(#rail)" opacity=".72"/>
+    <path d="M687 578 L779 610 L772 1095
+             Q771 1143 724 1143 H687Z"
+          fill="url(#rail)" opacity=".6"/>
+
+    <!-- Reflections down the T and around the airplane. -->
+    <path d="M445 378 L461 529
+             M470 616 L480 1090 Q480 1142 531 1143
+             M687 586 V1110
+             M675 470 Q659 374 629 337"
+          fill="none" stroke="#ffffa8" stroke-width="11"
+          stroke-linecap="round" filter="url(#blur)"/>
+    <path d="M464 614 L578 574
+             M680 576 L781 606
+             M476 637 L484 1084
+             M688 606 V1093"
+          fill="none" stroke="#ffffc0" stroke-opacity=".85"
+          stroke-width="4" stroke-linecap="round"/>
+
+    <!-- Lower bevel reflections. -->
+    <path d="M486 1111 Q493 1143 546 1144
+             M701 1144 Q757 1143 769 1108"
+          fill="none" stroke="#fff774" stroke-width="9"
+          stroke-linecap="round" filter="url(#blur)"/>
+  </g>
+
+  <ellipse cx="111" cy="102" rx="12" ry="7"
+           transform="rotate(-40 111 102)" fill="#ffffe9"/>
+</svg>

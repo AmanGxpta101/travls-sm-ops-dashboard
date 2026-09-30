@@ -16,28 +16,290 @@
   }
 }
 
-/*
- * Deliberately no prefers-color-scheme dark variant here. The last app built
- * this way (test-connection) had light-background cards inherit near-white
- * text from a dark-mode body color and become unreadable — every surface in
- * this app sets its own explicit text color instead of relying on
- * inheritance, and the app itself only ships one theme so that invariant is
- * easy to keep.
- */
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Travls — dark metal fintech, single yellow accent. The same tokens as
+   test-connection (copied from travls-landing, whose docs/DESIGN.md is
+   canonical), so ops and users see one product. Dark only: every surface
+   sits on the dark canvas, so there's no light/dark text inheritance to get
+   wrong. */
+
+@theme {
+  /* Palette — two grounds, one accent */
+  --color-canvas: #0c0c0c;
+  --color-canvas-warm: #141313;
+  --color-surface: #1a1918;
+  --color-brand: #f5c518;
+  --color-brand-hover: #ffdf6b;
+  --color-gold: #e0a93b;
+  --color-ink: #f5f3ef;
+  --color-ink-muted: #8e8b85;
+  --color-ink-faint: #5d5a55;
+  --color-hairline: rgb(255 255 255 / 0.08);
+  --color-hairline-lit: rgb(255 255 255 / 0.16);
+  --color-destructive: #db4b3f;
+  /* Destructive as text on the dark ground — #db4b3f is too dim to read small. */
+  --color-destructive-ink: #f08a80;
+  --color-success: #7fc98f;
+
+  /* Type */
+  --font-sans: var(--font-switzer), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-newsreader), ui-serif, Georgia, serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
+
+  --text-figure: clamp(2rem, 2vw + 1.25rem, 2.75rem);
+  --text-figure--font-weight: 400;
+  --text-figure--letter-spacing: -0.01em;
+  --text-figure--line-height: 1;
+
+  --text-section: clamp(1.375rem, 1vw + 1rem, 1.75rem);
+  --text-section--font-weight: 700;
+  --text-section--letter-spacing: -0.02em;
+  --text-section--line-height: 1.1;
+
+  --text-eyebrow: 0.6875rem;
+  --text-eyebrow--letter-spacing: 0.14em;
+  --text-eyebrow--line-height: 1.4;
+
+  /* Motifs — 14px on cards, 999px on buttons and chips, 24px on panels. */
+  --radius-card: 14px;
+  --radius-pill: 999px;
+  --radius-panel: 24px;
+
+  --ease-travls: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+:root {
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+::selection {
+  background-color: var(--color-brand);
+  color: var(--color-canvas);
+}
+
+/* Eyebrow: mono, uppercase, tracked. */
+@utility eyebrow {
+  color: var(--color-ink-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-eyebrow);
+  letter-spacing: var(--text-eyebrow--letter-spacing);
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+/* The standard container for a block of the dashboard. */
+@utility panel {
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-panel);
+  background-color: var(--color-canvas-warm);
+}
+
+/* Marks the one thing that matters in view — the campaign summary, a
+   user's points. A lit gold edge with a soft glow around it. */
+@utility card-gold {
+  border: 1px solid color-mix(in srgb, var(--color-brand) 55%, transparent);
+  background-color: var(--color-canvas-warm);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-brand) 10%, transparent),
+    0 0 36px -10px color-mix(in srgb, var(--color-brand) 45%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--color-brand) 25%, transparent);
+}
+
+@utility btn-brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-brand);
+  color: var(--color-canvas);
+  font-weight: 600;
+  padding: 0.5rem 1.125rem;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  transition: background-color 200ms var(--ease-travls);
+  &:hover:not(:disabled) {
+    background-color: var(--color-brand-hover);
+  }
+  &:disabled {
+    opacity: 0.5;
+  }
+}
+
+@utility btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-hairline-lit);
+  color: var(--color-ink);
+  font-weight: 500;
+  padding: 0.5rem 1.125rem;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  transition:
+    border-color 200ms var(--ease-travls),
+    color 200ms var(--ease-travls);
+  &:hover:not(:disabled) {
+    border-color: var(--color-brand);
+  }
+  &:disabled {
+    opacity: 0.5;
+  }
+}
+
+/* Irreversible moderation (invalidate, take away points). */
+@utility btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--color-destructive) 60%, transparent);
+  background-color: color-mix(in srgb, var(--color-destructive) 18%, transparent);
+  color: var(--color-destructive-ink);
+  font-weight: 600;
+  padding: 0.5rem 1.125rem;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  transition: background-color 200ms var(--ease-travls);
+  &:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--color-destructive) 30%, transparent);
+  }
+}
+
+/* Small pill button for row-level actions (Refresh, Retire, Disable…). */
+@utility btn-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-hairline-lit);
+  color: var(--color-ink-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.25rem 0.75rem;
+  white-space: nowrap;
+  transition:
+    border-color 200ms var(--ease-travls),
+    color 200ms var(--ease-travls);
+  &:hover:not(:disabled) {
+    border-color: var(--color-brand);
+    color: var(--color-ink);
+  }
+}
+
+@utility field {
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-hairline-lit);
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  padding: 0.5rem 0.875rem;
+  font-size: 0.875rem;
+  &::placeholder {
+    color: var(--color-ink-faint);
+  }
+  &:focus {
+    outline: none;
+    border-color: var(--color-brand);
+  }
+}
+
+/* Textareas and selects get the field look with card corners — a pill
+   around three lines of text looks wrong. */
+@utility field-box {
+  border-radius: 12px;
+  border: 1px solid var(--color-hairline-lit);
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  padding: 0.5rem 0.875rem;
+  font-size: 0.875rem;
+  &::placeholder {
+    color: var(--color-ink-faint);
+  }
+  &:focus {
+    outline: none;
+    border-color: var(--color-brand);
+  }
+}
+
+/* Status pills. One tone per meaning, all quiet except brand. */
+@utility badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-hairline);
+  padding: 0.125rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+@utility tone-good {
+  border-color: color-mix(in srgb, var(--color-success) 35%, transparent);
+  background-color: color-mix(in srgb, var(--color-success) 10%, transparent);
+  color: var(--color-success);
+}
+@utility tone-brand {
+  border-color: color-mix(in srgb, var(--color-brand) 35%, transparent);
+  background-color: color-mix(in srgb, var(--color-brand) 10%, transparent);
+  color: var(--color-brand);
+}
+@utility tone-bad {
+  border-color: color-mix(in srgb, var(--color-destructive) 40%, transparent);
+  background-color: color-mix(in srgb, var(--color-destructive) 12%, transparent);
+  color: var(--color-destructive-ink);
+}
+@utility tone-muted {
+  border-color: var(--color-hairline);
+  background-color: rgb(255 255 255 / 0.04);
+  color: var(--color-ink-muted);
+}
+
+/* Data tables: mono uppercase heads, hairline rows, a faint lift on hover. */
+.data-table {
+  min-width: 100%;
+  font-size: 0.875rem;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.data-table thead th {
+  position: sticky;
+  top: 0;
+  background-color: var(--color-canvas-warm);
+  border-bottom: 1px solid var(--color-hairline);
+  color: var(--color-ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding: 0.875rem 1rem;
+}
+.data-table tbody td {
+  border-bottom: 1px solid var(--color-hairline);
+  padding: 0.875rem 1rem;
+}
+.data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.data-table tbody tr {
+  transition: background-color 150ms var(--ease-travls);
+}
+.data-table tbody tr:hover {
+  background-color: rgb(255 255 255 / 0.025);
+}
+
+/* Disclosure summaries used as buttons: no marker. */
+summary::-webkit-details-marker {
+  display: none;
+}
+summary {
+  list-style: none;
 }

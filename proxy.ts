@@ -18,6 +18,8 @@ export function proxy(request: NextRequest) {
   return NextResponse.next();
 }
 
+// Brand assets and the tab icon are public: the login page shows them, and
+// next/image fetches them server-side without the session cookie.
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|assets/|icon.svg|favicon.ico).*)"],
 };

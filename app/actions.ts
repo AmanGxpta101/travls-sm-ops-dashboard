@@ -40,7 +40,7 @@ function done(formData: FormData | undefined, notice?: string): never {
 
 async function requireActor(formData: FormData): Promise<string> {
   const actor = await getActor();
-  if (!actor) fail('Set your name in "Acting as" at the top first — it goes on the audit trail.', formData);
+  if (!actor) fail("Your session has no ops account — log out and sign in again.", formData);
   return actor;
 }
 
@@ -53,17 +53,6 @@ async function attempt(formData: FormData | undefined, fn: () => Promise<unknown
     message = (err as Error).message;
   }
   if (message) fail(message, formData);
-}
-
-export async function setActorAction(formData: FormData) {
-  const name = text(formData, "actor");
-  const store = await cookies();
-  if (name) {
-    store.set(ACTOR_COOKIE, name, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 90 });
-  } else {
-    store.delete(ACTOR_COOKIE);
-  }
-  done(formData);
 }
 
 export async function refreshAllAction(formData: FormData) {
@@ -143,5 +132,6 @@ export async function refreshShareAction(formData: FormData) {
 export async function logoutAction() {
   const store = await cookies();
   store.delete(SESSION_COOKIE);
+  store.delete(ACTOR_COOKIE);
   redirect("/login");
 }
