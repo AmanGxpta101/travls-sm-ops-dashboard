@@ -4,12 +4,7 @@ import { listUsers, type UserRow } from "@/lib/ops-api";
 import { Banners, ErrorBanner, OpsHeader, PageShell, fmtDate, fmtNum } from "../shell";
 
 /** Everyone who took part in the campaign — click through for their full history and moderation. */
-export default async function UsersPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string; notice?: string }>;
-}) {
-  const params = await searchParams;
+export default async function UsersPage() {
   const actor = await getActor();
 
   let users: UserRow[] = [];
@@ -32,11 +27,11 @@ export default async function UsersPage({
         subtitle={
           <>
             {users.length} participant{users.length === 1 ? "" : "s"} ·{" "}
-            <span className="text-brand">{fmtNum(totalPoints)}</span> points held in total
+            <span className="text-brand-ink">{fmtNum(totalPoints)}</span> points held in total
           </>
         }
       />
-      <Banners error={params.error} notice={params.notice} />
+      <Banners />
 
       {loadError ? (
         <ErrorBanner>Can&apos;t reach the Social Mining Service: {loadError}</ErrorBanner>
@@ -65,14 +60,14 @@ export default async function UsersPage({
                     <Link href={`/users/${encodeURIComponent(u.userId)}`} className="group flex items-center gap-3">
                       <span
                         className={`grid size-9 shrink-0 place-items-center rounded-full border bg-surface text-sm font-semibold uppercase ${
-                          u.isKol ? "border-brand/60 text-brand" : "border-hairline-lit text-ink"
+                          u.isKol ? "border-brand/60 text-brand-ink" : "border-hairline-lit text-ink"
                         }`}
                         aria-hidden
                       >
                         {(u.handle ?? u.userId).slice(0, 1)}
                       </span>
                       <span className="min-w-0">
-                        <span className="font-medium text-ink group-hover:text-brand">
+                        <span className="font-medium text-ink group-hover:text-brand-ink">
                           {u.handle ? `@${u.handle}` : "(no X account)"}
                         </span>
                         {u.isKol && <span className="badge tone-brand ml-2 px-1.5 py-0 text-[10px]">★ KOL</span>}

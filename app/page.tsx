@@ -2,37 +2,20 @@ import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getActor } from "@/lib/actor";
+import { setFlash } from "@/lib/flash";
 import {
   addKol,
-  issueCredit,
   listChallenges,
   listKols,
   listShares,
   refreshEngagement,
   removeKol,
+  removeKolInvite,
   type ChallengeRow,
   type KolRow,
   type OpsShareRow,
 } from "@/lib/ops-api";
-import { ChallengesPanel } from "./challenges-panel";
 import { Banners, ErrorBanner, OpsHeader, PageShell, SectionHeading, Thumb, fmtDate, fmtDay, fmtNum } from "./shell";
-
-async function issueCreditAction(formData: FormData) {
-  "use server";
-  const shareId = String(formData.get("shareId"));
-  const amount = Number(formData.get("amount"));
-  const issuedBy = await getActor();
-
-  if (!issuedBy) {
-    redirect(`/?error=${encodeURIComponent("Your session has no ops account — log out and sign in again.")}`);
-  }
-  if (!Number.isFinite(amount) || amount <= 0) {
-    redirect(`/?error=${encodeURIComponent("Credit amount must be a positive number.")}`);
-  }
-
-  await issueCredit({ shareId, amount, issuedBy });
-  redirect("/");
-}
 
 /**
  * Engagement is on-demand only (plan §7.3) — nothing polls X in the
@@ -51,9 +34,7 @@ async function refreshEngagementAction(formData: FormData) {
   } catch (err) {
     errorMessage = (err as Error).message;
   }
-  if (errorMessage) {
-    redirect(`/?error=${encodeURIComponent(errorMessage)}`);
-  }
+  if (errorMessage) await setFlash("error", errorMessage);
   redirect("/");
 }
 
@@ -67,24 +48,33 @@ async function addKolAction(formData: FormData) {
   const who = String(formData.get("who") ?? "").trim();
   const addedBy = await getActor();
   if (!who || !addedBy) {
-    redirect(`/?error=${encodeURIComponent("Enter a handle or user ID to add a KOL.")}`);
+    await setFlash("error", "Enter a handle or user ID to add a KOL.");
+    redirect("/");
   }
+  // X handles are 1–15 letters, digits or underscores; user IDs never fit that
+  // (usr_<uuid>), so a bare "aman_Travls" is read as a handle, not an ID.
+  const isHandle = who.startsWith("@") || /^[A-Za-z0-9_]{1,15}$/.test(who);
   let errorMessage: string | null = null;
+  let notice = "";
   try {
-    // A leading "@" means an X handle; anything else is taken as a Travls user ID.
-    await addKol(who.startsWith("@") ? { handle: who, addedBy } : { userId: who, addedBy });
+    const added = await addKol(isHandle ? { handle: who, addedBy } : { userId: who, addedBy });
+    const name = isHandle ? `@${who.replace(/^@/, "")}` : who;
+    notice = added.pending
+      ? `${name} hasn't connected X yet — they'll become a KOL as soon as they do.`
+      : `${name} is now a KOL.`;
   } catch (err) {
     errorMessage = (err as Error).message;
   }
-  if (errorMessage) {
-    redirect(`/?error=${encodeURIComponent(errorMessage)}`);
-  }
+  await setFlash(errorMessage ? "error" : "notice", errorMessage ?? notice);
   redirect("/");
 }
 
 async function removeKolAction(formData: FormData) {
   "use server";
-  await removeKol(String(formData.get("userId")));
+  const userId = String(formData.get("userId") ?? "");
+  const handle = String(formData.get("handle") ?? "");
+  // A pending entry has no user yet, only the handle ops typed.
+  await (userId ? removeKol(userId) : removeKolInvite(handle));
   redirect("/");
 }
 
@@ -162,7 +152,7 @@ function Summary({
   ];
 
   return (
-    <section aria-labelledby="summary-heading" className="card-gold relative overflow-hidden rounded-panel p-5 sm:p-8">
+    <section aria-labelledby="summary-heading" className="card-gold stay-dark relative overflow-hidden rounded-panel p-5 sm:p-8">
       <Image
         src="/assets/photography/globe-flight.webp"
         alt=""
@@ -186,8 +176,11 @@ function Summary({
           <p className="mt-3 text-sm text-ink-muted sm:text-base">
             share{shares.length === 1 ? "" : "s"} tracked from <span className="text-ink">{fmtNum(people)}</span>{" "}
             {people === 1 ? "person" : "people"} ·{" "}
-            <span className="text-brand">{challenges.filter((c) => c.active).length}</span> live challenges ·{" "}
-            <span className="text-brand">{kols.length}</span> KOL{kols.length === 1 ? "" : "s"}
+            <Link href="/challenges" className="underline decoration-hairline-lit underline-offset-4 hover:text-ink">
+              <span className="text-brand-ink">{challenges.filter((c) => c.active && !c.ended).length}</span> live challenges
+            </Link>{" "}
+            ·{" "}
+            <span className="text-brand-ink">{kols.length}</span> KOL{kols.length === 1 ? "" : "s"}
           </p>
         </div>
 
@@ -200,7 +193,7 @@ function Summary({
               }`}
             >
               <dt className="eyebrow">{s.label}</dt>
-              <dd className={`mt-1 font-serif text-2xl tabular-nums ${s.lit ? "text-brand" : "text-ink"}`}>
+              <dd className={`mt-1 font-serif text-2xl tabular-nums ${s.lit ? "text-brand-ink" : "text-ink"}`}>
                 {fmtNum(s.value)}
               </dd>
             </div>
@@ -219,42 +212,58 @@ function KolPanel({ kols }: { kols: KolRow[] }) {
         count={kols.length}
         aside="KOLs' shares are posted for them via the X API. Everyone else posts the template and pastes the link back."
       />
-      <form action={addKolAction} className="flex gap-2">
+      <form action={addKolAction} className="flex max-w-md gap-2">
         <input type="text" name="who" placeholder="@handle or user ID" required className="field min-w-0 flex-1" />
         <button type="submit" className="btn-brand">
           Add KOL
         </button>
       </form>
       {kols.length > 0 ? (
-        <ul className="flex flex-col gap-1.5">
-          {kols.map((k) => (
-            <li
-              key={k.userId}
-              className="flex items-center gap-3 rounded-card border border-hairline bg-surface/60 py-2 pl-2 pr-1.5"
-              title={`${k.userId} · added by ${k.addedBy} ${new Date(k.addedAt).toLocaleDateString()}`}
-            >
-              <Avatar label={k.handle ?? k.userId} />
-              <div className="min-w-0 flex-1">
-                <Link
-                  href={`/users/${encodeURIComponent(k.userId)}`}
-                  className="block truncate text-sm font-medium text-ink hover:text-brand"
-                >
-                  {k.handle ? `@${k.handle}` : k.userId}
-                </Link>
-                <p className="truncate text-xs text-ink-muted">added by {k.addedBy}</p>
-              </div>
-              <form action={removeKolAction}>
-                <input type="hidden" name="userId" value={k.userId} />
-                <button
-                  type="submit"
-                  className="grid size-7 place-items-center rounded-full text-ink-muted transition-colors hover:bg-destructive/15 hover:text-destructive-ink"
-                  aria-label={`Remove ${k.handle ?? k.userId} from KOLs`}
-                >
-                  ×
-                </button>
-              </form>
-            </li>
-          ))}
+        <ul className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+          {kols.map((k) => {
+            const name = k.handle ? `@${k.handle}` : k.userId!;
+            return (
+              <li
+                key={k.userId ?? `pending:${k.handle}`}
+                className={`flex items-center gap-3 rounded-card border py-2 pl-2 pr-1.5 ${
+                  k.pending ? "border-dashed border-hairline-lit" : "border-hairline bg-surface/60"
+                }`}
+                title={`${k.userId ?? "not connected yet"} · added by ${k.addedBy} ${new Date(k.addedAt).toLocaleDateString()}`}
+              >
+                <Avatar label={k.handle ?? k.userId ?? "?"} />
+                <div className="min-w-0 flex-1">
+                  {k.userId ? (
+                    <Link
+                      href={`/users/${encodeURIComponent(k.userId)}`}
+                      className="block truncate text-sm font-medium text-ink hover:text-brand-ink"
+                    >
+                      {name}
+                    </Link>
+                  ) : (
+                    <p className="truncate text-sm font-medium text-ink">{name}</p>
+                  )}
+                  <p className="truncate text-xs text-ink-muted">
+                    {k.pending ? (
+                      <span className="text-gold">Waiting to connect X</span>
+                    ) : (
+                      <>added by {k.addedBy}</>
+                    )}
+                  </p>
+                </div>
+                <form action={removeKolAction}>
+                  <input type="hidden" name="userId" value={k.userId ?? ""} />
+                  <input type="hidden" name="handle" value={k.handle ?? ""} />
+                  <button
+                    type="submit"
+                    className="grid size-7 place-items-center rounded-full text-ink-muted transition-colors hover:bg-destructive/15 hover:text-destructive-ink"
+                    aria-label={`Remove ${name} from KOLs`}
+                  >
+                    ×
+                  </button>
+                </form>
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <p className="rounded-card border border-dashed border-hairline-lit px-4 py-3 text-sm text-ink-muted">
@@ -277,7 +286,6 @@ function SharesTable({ shares, kolUserIds }: { shares: OpsShareRow[]; kolUserIds
             <th>Post</th>
             <th>Status</th>
             <th>Shared</th>
-            <th>Issue credit</th>
             <th className="text-right!">Likes</th>
             <th className="text-right!">RTs</th>
             <th className="text-right!">Replies</th>
@@ -294,7 +302,7 @@ function SharesTable({ shares, kolUserIds }: { shares: OpsShareRow[]; kolUserIds
                   <Avatar label={row.handle ?? row.userId} />
                   <Link
                     href={`/users/${encodeURIComponent(row.userId)}`}
-                    className="whitespace-nowrap font-medium text-ink hover:text-brand"
+                    className="whitespace-nowrap font-medium text-ink hover:text-brand-ink"
                     title="Open this user's profile — history, points, moderation"
                   >
                     {row.handle ? (
@@ -313,7 +321,7 @@ function SharesTable({ shares, kolUserIds }: { shares: OpsShareRow[]; kolUserIds
                     )}
                   </Link>
                   {kolUserIds.has(row.userId) && (
-                    <span className="text-xs text-brand" title="On the KOL list">
+                    <span className="text-xs text-brand-ink" title="On the KOL list">
                       ★
                     </span>
                   )}
@@ -334,7 +342,7 @@ function SharesTable({ shares, kolUserIds }: { shares: OpsShareRow[]; kolUserIds
                       >
                         {row.task.title}
                       </p>
-                      <p className="mt-0.5 text-xs font-semibold text-brand">{row.task.points} pts</p>
+                      <p className="mt-0.5 text-xs font-semibold text-brand-ink">{row.task.points} pts</p>
                       {row.invalidated && (
                         <p className="mt-1 text-xs text-destructive-ink">
                           Invalidated: “{row.invalidated.reason}” — {row.invalidated.by}
@@ -365,7 +373,7 @@ function SharesTable({ shares, kolUserIds }: { shares: OpsShareRow[]; kolUserIds
                       href={row.postUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="whitespace-nowrap font-medium text-brand hover:text-brand-hover"
+                      className="whitespace-nowrap font-medium text-brand-ink hover:text-brand-ink-hover"
                     >
                       View ↗
                     </a>
@@ -389,27 +397,6 @@ function SharesTable({ shares, kolUserIds }: { shares: OpsShareRow[]; kolUserIds
                 <StatusBadge row={row} />
               </td>
               <td className="whitespace-nowrap text-ink-muted">{fmtDay(row.sharedAt)}</td>
-              <td>
-                {row.eligible && !row.credited ? (
-                  <form action={issueCreditAction} className="flex items-center gap-1.5">
-                    <input type="hidden" name="shareId" value={row.shareId} />
-                    <input
-                      type="number"
-                      name="amount"
-                      placeholder="₹ Amt"
-                      min="0"
-                      step="0.01"
-                      required
-                      className="field w-24 px-3 py-1.5 text-xs"
-                    />
-                    <button type="submit" className="btn-brand px-3.5 py-1.5 text-xs">
-                      Credit
-                    </button>
-                  </form>
-                ) : (
-                  <span className="text-xs text-ink-faint">—</span>
-                )}
-              </td>
               {(["likes", "retweets", "replies", "quoteCount", "bookmarkCount", "impressionCount"] as const).map((k) => (
                 <td key={k} className="text-right tabular-nums text-ink">
                   {row.metrics ? fmtNum(row.metrics[k]) : <span className="text-ink-faint">—</span>}
@@ -423,12 +410,7 @@ function SharesTable({ shares, kolUserIds }: { shares: OpsShareRow[]; kolUserIds
   );
 }
 
-export default async function Dashboard({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string; notice?: string }>;
-}) {
-  const params = await searchParams;
+export default async function Dashboard() {
   const actor = await getActor();
 
   let shares: OpsShareRow[] = [];
@@ -440,12 +422,12 @@ export default async function Dashboard({
   } catch (err) {
     loadError = (err as Error).message;
   }
-  const kolUserIds = new Set(kols.map((k) => k.userId));
+  const kolUserIds = new Set(kols.flatMap((k) => (k.userId ? [k.userId] : [])));
 
   return (
     <PageShell>
       <OpsHeader active="activity" actor={actor} returnTo="/" />
-      <Banners error={params.error} notice={params.notice} />
+      <Banners />
 
       {loadError ? (
         <ErrorBanner>Can&apos;t reach the Social Mining Service: {loadError}</ErrorBanner>
@@ -453,10 +435,7 @@ export default async function Dashboard({
         <>
           <Summary shares={shares} kols={kols} challenges={challenges} />
 
-          <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-            <ChallengesPanel challenges={challenges} />
-            <KolPanel kols={kols} />
-          </div>
+          <KolPanel kols={kols} />
 
           <section className="flex flex-col gap-4">
             <SectionHeading

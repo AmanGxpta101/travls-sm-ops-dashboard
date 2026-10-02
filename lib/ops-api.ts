@@ -12,18 +12,34 @@ function opsApiKey(): string {
   return key;
 }
 
+/**
+ * The readable part of a service error: Nest puts it in `message` (an array
+ * for validation errors). Falls back to the status and raw body.
+ */
+async function errorMessage(res: Response, path: string): Promise<string> {
+  const body = await res.text();
+  try {
+    const message = (JSON.parse(body) as { message?: string | string[] }).message;
+    if (message) return Array.isArray(message) ? message.join("; ") : message;
+  } catch {
+    // Not JSON — fall through.
+  }
+  return `Social Mining Service returned ${res.status} for ${path}${body ? `: ${body}` : ""}`;
+}
+
 async function opsFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${apiBaseUrl()}${path}`, {
     ...init,
     headers: {
       "x-ops-key": opsApiKey(),
-      "Content-Type": "application/json",
+      // A FormData body sets its own multipart content type.
+      ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
       ...init?.headers,
     },
     cache: "no-store",
   });
   if (!res.ok) {
-    throw new Error(`Social Mining Service returned ${res.status} for ${path}: ${await res.text()}`);
+    throw new Error(await errorMessage(res, path));
   }
   return res.json() as Promise<T>;
 }
@@ -80,8 +96,11 @@ export function refreshEngagement(shareId: string) {
 }
 
 export interface KolRow {
-  userId: string;
+  /** Null while pending: added by handle, and that X account hasn't connected yet. */
+  userId: string | null;
   handle: string | null;
+  /** Becomes a KOL automatically when this handle connects X. */
+  pending: boolean;
   addedBy: string;
   addedAt: string;
 }
@@ -92,7 +111,15 @@ export function listKols(): Promise<KolRow[]> {
 
 /** Pass a userId or an X handle (resolved server-side via the user's connected account). */
 export function addKol(params: { userId?: string; handle?: string; addedBy: string }) {
-  return opsFetch("/v1/ops/kols", { method: "POST", body: JSON.stringify(params) });
+  return opsFetch<{ userId: string | null; pending: boolean }>("/v1/ops/kols", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+/** Withdraws a KOL handle that hasn't connected X yet. */
+export function removeKolInvite(handle: string) {
+  return opsFetch(`/v1/ops/kols/pending/${encodeURIComponent(handle)}`, { method: "DELETE" });
 }
 
 export function removeKol(userId: string) {
@@ -134,6 +161,12 @@ export interface ChallengeRow {
   description: string;
   template: string;
   points: number;
+  /** Public URL of the image posted with it, or null. */
+  imageUrl: string | null;
+  /** ISO end of the deadline day (IST), or null if it runs until archived. */
+  deadline: string | null;
+  /** Deadline has passed: no new starts or submissions. */
+  ended: boolean;
   active: boolean;
   createdBy: string;
   createdAt: string;
@@ -150,8 +183,33 @@ export function createChallenge(params: {
   template: string;
   points: number;
   by: string;
+  image?: File;
+  /** YYYY-MM-DD; omit for no deadline. */
+  deadline?: string;
 }) {
-  return opsFetch("/v1/ops/tasks", { method: "POST", body: JSON.stringify(params) });
+  const { image, ...fields } = params;
+  if (!image) return opsFetch("/v1/ops/tasks", { method: "POST", body: JSON.stringify(fields) });
+  const form = new FormData();
+  for (const [key, value] of Object.entries(fields)) if (value !== undefined) form.set(key, String(value));
+  form.set("image", image);
+  return opsFetch("/v1/ops/tasks", { method: "POST", body: form });
+}
+
+/** Adds or replaces a challenge's image; null removes it. Affects posts made from now on. */
+export function setChallengeImage(id: string, image: File | null) {
+  const path = `/v1/ops/tasks/${encodeURIComponent(id)}/image`;
+  if (!image) return opsFetch(path, { method: "DELETE" });
+  const form = new FormData();
+  form.set("image", image);
+  return opsFetch(path, { method: "PUT", body: form });
+}
+
+/** Sets (YYYY-MM-DD) or removes (null) a challenge's deadline. */
+export function setChallengeDeadline(id: string, deadline: string | null) {
+  return opsFetch(`/v1/ops/tasks/${encodeURIComponent(id)}/deadline`, {
+    method: "PUT",
+    body: JSON.stringify({ deadline }),
+  });
 }
 
 export function setChallengeActive(id: string, active: boolean) {
@@ -216,7 +274,8 @@ export interface UserProfile {
     title: string;
     points: number;
     active: boolean;
-    status: "completed" | "awaiting_post" | "not_started" | "blocked" | "retired";
+    status: "completed" | "awaiting_post" | "not_started" | "blocked" | "archived" | "missed" | "ended";
+    deadline: string | null;
     completedAt: string | null;
     completedShareId: string | null;
     attempts: number;

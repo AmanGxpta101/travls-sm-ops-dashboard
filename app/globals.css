@@ -18,9 +18,8 @@
 
 /* Travls — dark metal fintech, single yellow accent. The same tokens as
    test-connection (copied from travls-landing, whose docs/DESIGN.md is
-   canonical), so ops and users see one product. Dark only: every surface
-   sits on the dark canvas, so there's no light/dark text inheritance to get
-   wrong. */
+   canonical), so ops and users see one product. Dark is the base; the light
+   appearance below swaps the same tokens, so components never branch on it. */
 
 @theme {
   /* Palette — two grounds, one accent */
@@ -29,6 +28,11 @@
   --color-surface: #1a1918;
   --color-brand: #f5c518;
   --color-brand-hover: #ffdf6b;
+  /* The accent as text (brand-ink) and text on an accent fill (on-brand):
+     the same yellow in dark; light mode splits them (see below). */
+  --color-brand-ink: #f5c518;
+  --color-brand-ink-hover: #ffdf6b;
+  --color-on-brand: #0c0c0c;
   --color-gold: #e0a93b;
   --color-ink: #f5f3ef;
   --color-ink-muted: #8e8b85;
@@ -71,6 +75,89 @@
   color-scheme: dark;
 }
 
+/* Light appearance: follows the system unless the header toggle picked one
+   (data-theme on <html>, set from the `theme` cookie so the first paint is
+   right). Fills keep the real Travls yellow (with dark text on them); yellow
+   is unreadable as text on white, so text uses a warm amber that holds 4.5:1. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --color-canvas: #f6f4ef;
+    --color-canvas-warm: #ffffff;
+    --color-surface: #eeebe4;
+    --color-brand: #f5c518;
+    --color-brand-hover: #ebb800;
+    --color-brand-ink: #a85d00;
+    --color-brand-ink-hover: #874a00;
+    --color-on-brand: #1a1814;
+    --color-gold: #9a5400;
+    --color-ink: #1a1814;
+    --color-ink-muted: #66625a;
+    --color-ink-faint: #8c877e;
+    --color-hairline: rgb(0 0 0 / 0.08);
+    --color-hairline-lit: rgb(0 0 0 / 0.16);
+    --color-destructive: #c2352a;
+    --color-destructive-ink: #a8281e;
+    --color-success: #2a7040;
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-canvas: #f6f4ef;
+  --color-canvas-warm: #ffffff;
+  --color-surface: #eeebe4;
+  --color-brand: #f5c518;
+  --color-brand-hover: #ebb800;
+  --color-brand-ink: #a85d00;
+  --color-brand-ink-hover: #874a00;
+  --color-on-brand: #1a1814;
+  --color-gold: #9a5400;
+  --color-ink: #1a1814;
+  --color-ink-muted: #66625a;
+  --color-ink-faint: #8c877e;
+  --color-hairline: rgb(0 0 0 / 0.08);
+  --color-hairline-lit: rgb(0 0 0 / 0.16);
+  --color-destructive: #c2352a;
+  --color-destructive-ink: #a8281e;
+  --color-success: #2a7040;
+}
+
+/* The wordmark is a pale-yellow image made for a dark ground; on light it
+   is deepened a touch so it holds up on the paler ground. Not inside the
+   dark photo cards. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .brand-logo:not(.stay-dark *) {
+    filter: brightness(0.86) saturate(1.3);
+  }
+}
+:root[data-theme="light"] .brand-logo:not(.stay-dark *) {
+  filter: brightness(0.86) saturate(1.3);
+}
+
+/* The photo cards (the globe banners, the login card) are dark imagery, so
+   they keep the dark tokens in either appearance. */
+.stay-dark {
+  color-scheme: dark;
+  --color-canvas: #0c0c0c;
+  --color-canvas-warm: #141313;
+  --color-surface: #1a1918;
+  --color-brand: #f5c518;
+  --color-brand-hover: #ffdf6b;
+  --color-brand-ink: #f5c518;
+  --color-brand-ink-hover: #ffdf6b;
+  --color-on-brand: #0c0c0c;
+  --color-gold: #e0a93b;
+  --color-ink: #f5f3ef;
+  --color-ink-muted: #8e8b85;
+  --color-ink-faint: #5d5a55;
+  --color-hairline: rgb(255 255 255 / 0.08);
+  --color-hairline-lit: rgb(255 255 255 / 0.16);
+  --color-destructive: #db4b3f;
+  --color-destructive-ink: #f08a80;
+  --color-success: #7fc98f;
+  color: var(--color-ink);
+}
+
 body {
   background-color: var(--color-canvas);
   color: var(--color-ink);
@@ -78,7 +165,7 @@ body {
 
 ::selection {
   background-color: var(--color-brand);
-  color: var(--color-canvas);
+  color: var(--color-on-brand);
 }
 
 /* Eyebrow: mono, uppercase, tracked. */
@@ -116,7 +203,7 @@ body {
   gap: 0.5rem;
   border-radius: var(--radius-pill);
   background-color: var(--color-brand);
-  color: var(--color-canvas);
+  color: var(--color-on-brand);
   font-weight: 600;
   padding: 0.5rem 1.125rem;
   font-size: 0.875rem;
@@ -204,7 +291,7 @@ body {
   }
   &:focus {
     outline: none;
-    border-color: var(--color-brand);
+    border-color: var(--color-brand-ink);
   }
 }
 
@@ -222,7 +309,7 @@ body {
   }
   &:focus {
     outline: none;
-    border-color: var(--color-brand);
+    border-color: var(--color-brand-ink);
   }
 }
 
@@ -246,8 +333,8 @@ body {
 }
 @utility tone-brand {
   border-color: color-mix(in srgb, var(--color-brand) 35%, transparent);
-  background-color: color-mix(in srgb, var(--color-brand) 10%, transparent);
-  color: var(--color-brand);
+  background-color: color-mix(in srgb, var(--color-brand) 14%, transparent);
+  color: var(--color-brand-ink);
 }
 @utility tone-bad {
   border-color: color-mix(in srgb, var(--color-destructive) 40%, transparent);
@@ -256,7 +343,7 @@ body {
 }
 @utility tone-muted {
   border-color: var(--color-hairline);
-  background-color: rgb(255 255 255 / 0.04);
+  background-color: color-mix(in srgb, var(--color-ink) 4%, transparent);
   color: var(--color-ink-muted);
 }
 
@@ -293,7 +380,7 @@ body {
   transition: background-color 150ms var(--ease-travls);
 }
 .data-table tbody tr:hover {
-  background-color: rgb(255 255 255 / 0.025);
+  background-color: color-mix(in srgb, var(--color-ink) 3%, transparent);
 }
 
 /* Disclosure summaries used as buttons: no marker. */

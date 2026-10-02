@@ -1,6 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
+import { readFlash } from "@/lib/flash";
 import { logoutAction, refreshAllAction } from "./actions";
+import { FlashBanner } from "./flash-banner";
+import { ThemeToggle } from "./theme-toggle";
 
 /** Page frame shared by every signed-in ops page. */
 export function PageShell({ children }: { children: React.ReactNode }) {
@@ -19,7 +22,7 @@ export function OpsHeader({
   title,
   subtitle,
 }: {
-  active: "activity" | "users";
+  active: "challenges" | "users" | "activity";
   actor: string;
   /** Path actions on this page redirect back to. */
   returnTo: string;
@@ -30,7 +33,7 @@ export function OpsHeader({
     <Link
       href={href}
       className={`rounded-pill px-4 py-1.5 text-sm font-medium transition-colors ${
-        active === key ? "bg-brand text-canvas" : "text-ink-muted hover:text-ink"
+        active === key ? "bg-brand text-on-brand" : "text-ink-muted hover:text-ink"
       }`}
       aria-current={active === key ? "page" : undefined}
     >
@@ -49,7 +52,7 @@ export function OpsHeader({
               width={290}
               height={60}
               priority
-              className="h-5 w-auto shrink-0 sm:h-6"
+              className="brand-logo h-5 w-auto shrink-0 sm:h-6"
             />
             <span className="rounded-pill border border-hairline-lit px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.2em] text-ink-muted">
               Ops
@@ -59,8 +62,9 @@ export function OpsHeader({
             className="flex gap-1 rounded-pill border border-hairline bg-canvas-warm p-1"
             aria-label="Sections"
           >
-            {tab("activity", "/", "Activity")}
+            {tab("challenges", "/challenges", "Challenges")}
             {tab("users", "/users", "Users")}
+            {tab("activity", "/", "Activity")}
           </nav>
         </div>
 
@@ -70,7 +74,7 @@ export function OpsHeader({
             title="Moderation actions are recorded under this name"
           >
             <span
-              className="grid size-7 place-items-center rounded-full bg-brand text-[11px] font-bold uppercase text-canvas"
+              className="grid size-7 place-items-center rounded-full bg-brand text-[11px] font-bold uppercase text-on-brand"
               aria-hidden
             >
               {initials(actor) || "?"}
@@ -98,6 +102,7 @@ export function OpsHeader({
               Log out
             </button>
           </form>
+          <ThemeToggle />
         </div>
       </header>
 
@@ -111,18 +116,13 @@ export function OpsHeader({
   );
 }
 
-export function Banners({ error, notice }: { error?: string; notice?: string }) {
-  return (
-    <>
-      {error && <ErrorBanner>{decodeURIComponent(error)}</ErrorBanner>}
-      {notice && (
-        <p className="flex items-start gap-2.5 rounded-card border border-success/30 bg-success/10 px-4 py-3 text-sm text-success">
-          <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-success" aria-hidden />
-          {decodeURIComponent(notice)}
-        </p>
-      )}
-    </>
-  );
+/**
+ * The one-shot error/notice a server action left for this page load,
+ * dismissible. Always rendered (even with nothing to show) so the banner
+ * survives the re-render Next does after the action, when the cookie is gone.
+ */
+export async function Banners() {
+  return <FlashBanner flash={await readFlash()} />;
 }
 
 export function ErrorBanner({ children }: { children: React.ReactNode }) {
@@ -186,7 +186,9 @@ const THUMBS: [RegExp, string][] = [
 ];
 const FALLBACK_THUMBS = ["card-poolside", "card-lounge-access", "travel-hotels", "card-coffeeshop"];
 
-function thumbFor(challenge: { id: string; title: string }) {
+function thumbFor(challenge: { id: string; title: string; imageUrl?: string | null }) {
+  // The image ops uploaded for it, which is what actually gets posted.
+  if (challenge.imageUrl) return challenge.imageUrl;
   const match = THUMBS.find(([re]) => re.test(challenge.title));
   const name =
     match?.[1] ??
@@ -194,7 +196,13 @@ function thumbFor(challenge: { id: string; title: string }) {
   return `/assets/photography/tasks/${name}.webp`;
 }
 
-export function Thumb({ challenge, className }: { challenge: { id: string; title: string }; className?: string }) {
+export function Thumb({
+  challenge,
+  className,
+}: {
+  challenge: { id: string; title: string; imageUrl?: string | null };
+  className?: string;
+}) {
   return (
     <Image
       src={thumbFor(challenge)}

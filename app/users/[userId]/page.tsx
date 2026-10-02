@@ -33,7 +33,9 @@ const CHALLENGE_BADGE: Record<Challenge["status"], { label: string; cls: string 
   awaiting_post: { label: "Awaiting post link", cls: "tone-brand" },
   not_started: { label: "Not started", cls: "tone-muted" },
   blocked: { label: "Disabled for user", cls: "tone-bad" },
-  retired: { label: "Retired", cls: "tone-muted" },
+  archived: { label: "Archived", cls: "tone-muted" },
+  missed: { label: "Missed — deadline passed", cls: "tone-bad" },
+  ended: { label: "Ended before they joined", cls: "tone-muted" },
 };
 
 const POST_BADGE: Record<HistoryRow["postStatus"], { label: string; cls: string }> = {
@@ -48,7 +50,7 @@ function Badge({ label, cls }: { label: string; cls: string }) {
 }
 
 function ChallengeRow({ c, userId, returnTo }: { c: Challenge; userId: string; returnTo: string }) {
-  const dim = c.status === "blocked" || c.status === "retired";
+  const dim = c.status === "blocked" || c.status === "archived" || c.status === "missed" || c.status === "ended";
   return (
     <li className="flex flex-wrap items-start gap-x-4 gap-y-3 rounded-card border border-hairline bg-surface/60 p-2.5 sm:flex-nowrap sm:items-center">
       <Thumb challenge={c} className={`w-16 sm:w-24 ${dim ? "opacity-40 grayscale" : ""}`} />
@@ -151,7 +153,7 @@ function HistoryTable({ history, returnTo }: { history: HistoryRow[]; returnTo: 
                       }`}
                     >
                       {h.challenge.title}{" "}
-                      {h.counts && <span className="text-xs font-semibold text-brand">+{h.challenge.points}</span>}
+                      {h.counts && <span className="text-xs font-semibold text-brand-ink">+{h.challenge.points}</span>}
                     </p>
                   ) : (
                     <p className="text-xs text-ink-faint">(before challenges)</p>
@@ -180,7 +182,7 @@ function HistoryTable({ history, returnTo }: { history: HistoryRow[]; returnTo: 
                         href={h.postUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="font-medium text-brand hover:text-brand-hover"
+                        className="font-medium text-brand-ink hover:text-brand-ink-hover"
                       >
                         View ↗
                       </a>
@@ -296,7 +298,7 @@ function PointsPanel({ profile, returnTo }: { profile: UserProfile; returnTo: st
 function ProfileBanner({ profile }: { profile: UserProfile }) {
   const handle = profile.account?.handle;
   return (
-    <section className="card-gold relative overflow-hidden rounded-panel p-5 sm:p-8">
+    <section className="card-gold stay-dark relative overflow-hidden rounded-panel p-5 sm:p-8">
       <Image
         src="/assets/photography/globe-flight.webp"
         alt=""
@@ -311,7 +313,7 @@ function ProfileBanner({ profile }: { profile: UserProfile }) {
         <div className="flex items-center gap-3 sm:gap-4">
           <div
             className={`grid size-12 shrink-0 place-items-center rounded-full border-2 bg-surface text-lg font-semibold uppercase sm:size-14 ${
-              profile.isKol ? "border-brand text-brand" : "border-hairline-lit text-ink"
+              profile.isKol ? "border-brand text-brand-ink" : "border-hairline-lit text-ink"
             }`}
             aria-hidden
           >
@@ -349,7 +351,7 @@ function ProfileBanner({ profile }: { profile: UserProfile }) {
             {fmtNum(profile.points.total)}
           </p>
           <p className="mt-3 text-sm text-ink-muted sm:text-base">
-            <span className="font-medium text-brand">+{fmtNum(profile.points.earned)}</span> earned
+            <span className="font-medium text-brand-ink">+{fmtNum(profile.points.earned)}</span> earned
             {profile.points.deducted > 0 && (
               <>
                 {" "}
@@ -363,16 +365,9 @@ function ProfileBanner({ profile }: { profile: UserProfile }) {
   );
 }
 
-export default async function UserProfilePage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ userId: string }>;
-  searchParams: Promise<{ error?: string; notice?: string }>;
-}) {
+export default async function UserProfilePage({ params }: { params: Promise<{ userId: string }> }) {
   const { userId: rawId } = await params;
   const userId = decodeURIComponent(rawId);
-  const query = await searchParams;
   const actor = await getActor();
   const returnTo = `/users/${encodeURIComponent(userId)}`;
 
@@ -387,9 +382,9 @@ export default async function UserProfilePage({
   return (
     <PageShell>
       <OpsHeader active="users" actor={actor} returnTo={returnTo} />
-      <Banners error={query.error} notice={query.notice} />
+      <Banners />
 
-      <Link href="/users" className="-mb-4 inline-flex w-fit items-center gap-1.5 text-sm text-ink-muted hover:text-brand">
+      <Link href="/users" className="-mb-4 inline-flex w-fit items-center gap-1.5 text-sm text-ink-muted hover:text-brand-ink">
         ← All users
       </Link>
 
@@ -403,7 +398,7 @@ export default async function UserProfilePage({
             <Stat
               label="Challenges"
               value={`${profile.challenges.filter((c) => c.status === "completed").length} / ${
-                profile.challenges.filter((c) => c.active).length
+                profile.challenges.filter((c) => c.active && c.status !== "missed" && c.status !== "ended").length
               }`}
               detail="completed / live"
             />

@@ -3,6 +3,9 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ACTOR_COOKIE } from "@/lib/actor";
 import { SESSION_COOKIE, checkLogin, normalizeEmail, sessionSecret } from "@/lib/auth";
+import { setFlash } from "@/lib/flash";
+import { Banners } from "../shell";
+import { ThemeToggle } from "../theme-toggle";
 import { PasswordField } from "./password-field";
 
 async function loginAction(formData: FormData) {
@@ -12,7 +15,8 @@ async function loginAction(formData: FormData) {
 
   // One message for either mistake, so the form doesn't reveal which emails exist.
   if (!checkLogin(email, password)) {
-    redirect("/login?error=1");
+    await setFlash("error", "Wrong email or password.");
+    redirect("/login");
   }
 
   const store = await cookies();
@@ -28,16 +32,11 @@ async function loginAction(formData: FormData) {
   redirect("/");
 }
 
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string }>;
-}) {
-  const params = await searchParams;
-
+export default function LoginPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center px-4 py-10">
-      <div className="card-gold relative w-full max-w-md overflow-hidden rounded-panel">
+    <main className="relative flex min-h-screen items-center justify-center px-4 py-10">
+      <ThemeToggle className="absolute right-4 top-4 sm:right-6 sm:top-6" />
+      <div className="card-gold stay-dark relative w-full max-w-md overflow-hidden rounded-panel">
         <div className="relative h-40 sm:h-48">
           <Image
             src="/assets/photography/globe-flight.webp"
@@ -62,11 +61,7 @@ export default async function LoginPage({
             <p className="mt-2 text-sm text-ink-muted">Sign in with your Travls ops account.</p>
           </div>
 
-          {params.error && (
-            <p role="alert" className="rounded-card border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive-ink">
-              Wrong email or password.
-            </p>
-          )}
+          <Banners />
 
           <form action={loginAction} className="flex flex-col gap-3">
             <input
